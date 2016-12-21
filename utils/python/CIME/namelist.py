@@ -988,7 +988,7 @@ class Namelist(object):
         specifies the file format. Formats other than 'nml' may not support all
         possible output values.
         """
-        expect(format_ in ('nml', 'rc'),
+        expect(format_ in ('nml', 'rc', 'nmlcontents'),
                "Namelist.write: unexpected output format %r" % str(format_))
         if isinstance(out_file, str) or isinstance(out_file, unicode):
             logger.debug("Writing namelist to: %s", out_file)
@@ -1003,14 +1003,16 @@ class Namelist(object):
         """Unwrapped version of `write` assuming that a file object is input."""
         if groups is None:
             groups = self._groups.keys()
-        if format_ == 'nml':
+        if format_ == 'nml' or format_ == 'nmlcontents':
             equals = ' ='
         elif format_ == 'rc':
             equals = ':'
+
         if (sorted_groups):
             group_names = sorted(group.lower() for group in groups)
         else:
             group_names = groups
+
         for group_name in group_names:
             if format_ == 'nml':
                 out_file.write("&%s\n" % group_name)
@@ -1035,6 +1037,8 @@ class Namelist(object):
                     out_file.write(line)
             if format_ == 'nml':
                 out_file.write("/\n")
+            if format_ == 'nmlcontents':
+                out_file.write("\n")
 
 
 class _NamelistEOF(Exception):

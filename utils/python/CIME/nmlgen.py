@@ -611,6 +611,10 @@ class NamelistGenerator(object):
             with open(data_list_path, "a") as input_data_list:
                 self._write_input_files(input_data_list)
 
+    def add_nmlcontents(self, filename, group, append=True, format_="nmlcontents", sorted_groups=True):
+        """ Write only contents of nml group """
+        self._namelist.write(filename, groups=[group], append=append, format_=format_, sorted_groups=sorted_groups)
+
     def write_seq_maps(self, filename):
         """ Write out seq_maps.rc"""
         self._namelist.write(filename, groups=["seq_maps"], format_="rc")
