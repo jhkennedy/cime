@@ -41,7 +41,7 @@ def create_dirs(case):
         with open(os.path.join(dir_,"CASEROOT"),"w+") as fd:
             fd.write(caseroot+"\n")
 
-def create_namelists(case):
+def create_namelists(case, cppdefs_only=False):
     """
     Create component namelists
     """
@@ -71,23 +71,31 @@ def create_namelists(case):
             compname = "drv"
         else:
             compname = case.get_value("COMP_%s" % model_str.upper())
-        cmd = os.path.join(config_dir, "buildnml")
-        logger.info("   Calling %s buildnml"%compname)
-        try:
-            mod = imp.load_source("buildnml", cmd)
-            mod.buildnml(case, caseroot, compname)
 
-        except SyntaxError as detail:
-            with open(cmd, 'r') as f:
-                first_line = f.readline()
-            if 'python' in first_line:
-                expect(False, detail)
-            else:
+        # create cppdefs if buildcpp file exists in config_dir
+        buildcpp_file_exists = False
+        if cppdefs_only:
+            buildcpp_file_exists = create_cppdefs(case, config_dir, compname) 
+
+        # if the buildcpp file does not exists - then generate the namelist
+        if not buildcpp_file_exists:
+            cmd = os.path.join(config_dir, "buildnml")
+            logger.info("   Calling %s buildnml"%compname)
+            try:
+                mod = imp.load_source("buildnml", cmd)
+                mod.buildnml(case, caseroot, compname)
+
+            except SyntaxError as detail:
+                with open(cmd, 'r') as f:
+                    first_line = f.readline()
+                if 'python' in first_line:
+                    expect(False, detail)
+                else:
+                    run_cmd_no_fail("%s %s" % (cmd, caseroot), verbose=False)
+            except AttributeError:
                 run_cmd_no_fail("%s %s" % (cmd, caseroot), verbose=False)
-        except AttributeError:
-            run_cmd_no_fail("%s %s" % (cmd, caseroot), verbose=False)
-        except:
-            raise
+            except:
+                raise
 
     logger.info("Finished creating component namelists")
 
@@ -114,3 +122,23 @@ def create_namelists(case):
     if (os.path.isdir(os.path.join(casebuild, "camconf"))):
         for file_to_copy in glob.glob(os.path.join(casebuild, "camconf", "*chem_mech*")):
             shutil.copy2(file_to_copy, docdir)
+
+###############################################################################
+def create_cppdefs(case, config_dir, compname):
+###############################################################################
+    """
+    Create component cppdefs 
+    """
+
+    buildcpp_file_exists = False
+    buildcpp_file = os.path.join(config_dir, "buildcpp")
+    if os.path.isfile(buildcpp_file):
+        buildcpp_file_exists = True
+        cmd = os.path.join(config_dir, "buildcpp")
+        logger.info("...Generating cppdefs for %s "%compname)
+        try:
+            mod = imp.load_source("buildcpp", cmd)
+            mod.buildcpp(case)
+        except:
+            raise
+    return buildcpp_file_exists

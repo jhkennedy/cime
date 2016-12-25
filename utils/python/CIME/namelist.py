@@ -1014,11 +1014,17 @@ class Namelist(object):
             group_names = groups
 
         for group_name in group_names:
+            print "DEBUG: group_name is ",group_name
             if format_ == 'nml':
                 out_file.write("&%s\n" % group_name)
             group = self._groups[group_name]
             for name in sorted(group.keys()):
                 values = group[name]
+                # @ is used in a namelist to put the same namelist variable in multiple groups
+                # in the write phase, all characters in the namelist variable name after 
+                # the @ and including the @ should be removed
+                if "@" in name:
+                    name = re.sub('@.+$', "", name)
                 # To prettify things for long lists of values, build strings
                 # line-by-line.
                 if values[0] == "True" or values[0] == "False":

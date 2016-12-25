@@ -4,7 +4,7 @@ functions for building CIME models
 from CIME.XML.standard_module_setup  import *
 from CIME.utils                 import get_model, append_status, analyze_build_log
 from CIME.provenance            import save_build_provenance
-from CIME.preview_namelists     import create_namelists
+from CIME.preview_namelists     import create_namelists, create_cppdefs
 import glob, shutil, time, threading, gzip, subprocess
 
 logger = logging.getLogger(__name__)
@@ -410,7 +410,10 @@ ERROR MPILIB is mpi-serial and USE_ESMF_LIB IS TRUE
     case.flush()
     if not model_only:
         logger.info("Generating component namelists as part of build")
-        create_namelists(case)
+        # Note that create_namelists is called if are in test mode in
+        # case.setup - so should only call this if not in test mode
+        if not case.get_value('TEST'):
+            create_namelists(case, cppdefs_only=True)
 
     return sharedpath
 
