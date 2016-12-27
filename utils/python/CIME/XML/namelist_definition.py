@@ -47,7 +47,7 @@ class NamelistDefinition(EntryID):
             schema = os.path.join(cimeroot,"cime_config","xml_schemas","entry_id_namelist.xsd")
             self.validate_xml_file(infile, schema)
 
-    def get_entries(self):
+    def get_entries(self, skip_groups=[], only_add_groups=[]):
         """Return all variables in the namelist definition file
         that do not have attributes of skip_default_entry or per_stream_entry
         """
@@ -56,8 +56,34 @@ class NamelistDefinition(EntryID):
         for node in nodes:
             skip_default_entry = node.get("skip_default_entry")
             per_stream_entry = node.get("per_stream_entry")
-            if not skip_default_entry and not per_stream_entry:
-                entries.append(node.get("id"))
+
+            skip_node = False
+            if skip_groups:
+                for group in skip_groups:
+                    group_node = self.get_node("group", root=node)
+                    if group_node.text == group:
+                        # don't add entry and to to the next node
+                        skip_node = True
+                if not skip_node:
+                    if not skip_default_entry and not per_stream_entry:
+                        entries.append(node.get("id"))
+
+            elif only_add_groups:
+                for group in only_ad_groups:
+                    group_node = node.get_node("group", root=node)
+                    if group_node.text == group:
+                        # add this entry only if its in the only_add_groups list
+                        per_stream_entry = node.get("per_stream_entry")
+                        if not per_stream_entry:
+                            entries.append(node.get("id"))
+                        continue
+                    if not skip_default_entry and not per_stream_entry:
+                        entries.append(node.get("id"))
+
+            else:
+                if not skip_default_entry and not per_stream_entry:
+                    entries.append(node.get("id"))
+
         return entries
 
     def get_per_stream_entries(self):

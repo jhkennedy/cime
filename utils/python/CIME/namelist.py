@@ -1014,7 +1014,6 @@ class Namelist(object):
             group_names = groups
 
         for group_name in group_names:
-            print "DEBUG: group_name is ",group_name
             if format_ == 'nml':
                 out_file.write("&%s\n" % group_name)
             group = self._groups[group_name]
