@@ -856,7 +856,7 @@ class Case(object):
                     os.path.join(toolsdir, "preview_namelists"),
                     os.path.join(toolsdir, "check_input_data"),
                     os.path.join(toolsdir, "check_case"),
-                    os.path.join(toolsdir, "archive_metadata.sh"),
+                    os.path.join(toolsdir, "archive_metadata"),
                     os.path.join(toolsdir, "xmlchange"),
                     os.path.join(toolsdir, "xmlquery"),
                     os.path.join(toolsdir, "pelayout"))
