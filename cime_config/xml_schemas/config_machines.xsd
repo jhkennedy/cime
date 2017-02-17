@@ -25,6 +25,7 @@
   <xs:element name="DIN_LOC_ROOT_CLMFORC" type="xs:string"/>
   <xs:element name="DOUT_S_ROOT" type="xs:string"/>
   <xs:element name="DOUT_L_MSROOT" type="xs:string"/>
+  <xs:element name="DOUT_L_HSI_PATH" type="xs:string"/>
   <xs:element name="BASELINE_ROOT" type="xs:string"/>
   <xs:element name="CCSM_CPRNC" type="xs:string"/>
   <xs:element name="PERL5LIB" type="xs:string"/>
@@ -85,6 +86,8 @@
 	<!-- DOUT_L_MSROOT: root directory on mass store system of
 	     long term archive files-->
         <xs:element ref="DOUT_L_MSROOT" minOccurs="0" maxOccurs="1"/>
+	<!-- DOUT_L_HST_PATH: path to hsi command -->
+        <xs:element ref="DOUT_L_HSI_PATH" minOccurs="0" maxOccurs="1"/>
 	<!-- BASELINE_ROOT:  Root directory for system test baseline files -->
         <xs:element ref="BASELINE_ROOT" minOccurs="0" maxOccurs="1"/>
 	<!-- CCSM_CPRNC: location of the cprnc tool, compares model output in testing-->
