@@ -793,6 +793,20 @@ def does_file_have_string(filepath, text):
     """
     return os.path.isfile(filepath) and text in open(filepath).read()
 
+def is_last_process_complete(filepath, expect_text, fail_text ):
+    """
+    Search the filepath in reverse order looking for expect_text 
+    before finding fail_text.
+    """
+    complete = False
+    # TODO - load file into buffer
+    # do re.compile for expect_text 
+    # reverse that list 
+    # get start position of first element in reversed list
+    # do the same for fail_text
+    # compare the positions
+    return complete
+
 def transform_vars(text, case=None, subgroup=None, check_members=None, default=None):
     """
     Do the variable substitution for any variables that need transforms

@@ -13,20 +13,24 @@ import time
 logger = logging.getLogger(__name__)
 
 ###############################################################################
-def _copy_dirs_hsi(dout_s_root, dout_l_msroot, dout_l_hpss_accnt, dout_l_dryrun, 
+def _copy_dirs_hsi(dout_s_root, dout_l_msroot, dout_l_hpss_accnt, dryrun, 
                    dout_l_delete):
 ###############################################################################
 
     logger.debug('In copy_dirs_hsi...')
 
+    # intialize run_cmd return codes
+    stat = 0
+    msg = ''
+
+    # initialize success for return status
     success = False
     
     # check if hsi exists in path
     hsi = find_executable("hsi")
     
-    logger.info("hsi : ".format(hsi))
-    logger.info("os.environ['PATH'] :".format(os.environ['PATH']))
-    expect(hsi == None,"lt_archive: asked for copy_dirs_hsi - but hsi not found, check path")
+    logger.info("hsi: %s " %hsi)
+    expect(hsi != None, "lt_archive: asked for copy_dirs_hsi - but hsi not found, check path")
  
     # check to see if copies of local files should be saved or not
     saveFlag="-PR"
@@ -34,9 +38,10 @@ def _copy_dirs_hsi(dout_s_root, dout_l_msroot, dout_l_hpss_accnt, dout_l_dryrun,
         saveFlag="-PRd"
 
     os.chdir(dout_s_root)
+    logger.info('cwd: %s' %os.getcwd())
 
     # send files to HPSS
-    hsiArgs='mkdir -p' + dout_l_msroot + ' ; chmod +t ' + dout_l_msroot + ' ; cd ' + dout_l_msroot + ' ; put ' + saveFlag + ' *'
+    hsiArgs='"mkdir -p ' + dout_l_msroot + ' ; chmod +t ' + dout_l_msroot + ' ; cd ' + dout_l_msroot + ' ; put ' + saveFlag + ' *"'
 
     logger.debug('hsiArgs: {0} '.format(hsiArgs))
 
@@ -47,9 +52,10 @@ def _copy_dirs_hsi(dout_s_root, dout_l_msroot, dout_l_hpss_accnt, dout_l_dryrun,
     if not dout_l_hpss_accnt.startswith('0000'):
         hsiCmd = 'hsi -a ' + dout_l_hpss_accnt + ' ' + hsiArgs
 
-    if dout_l_dryrun:
-        logger.info('dryrun: {0}'.format(hsiCmd))
+    if dryrun:
+        logger.info('dryrun: %s' %hsiCmd)
     else:
+        logger.info('running command: %s' %hsiCmd)
         stat,msg,errput = run_cmd(hsiCmd)
 
     if stat == 0:
@@ -59,7 +65,7 @@ def _copy_dirs_hsi(dout_s_root, dout_l_msroot, dout_l_hpss_accnt, dout_l_dryrun,
 
 
 ###############################################################################
-def _copy_files(dout_s_root, dout_l_msroot, dout_l_hpss_accnt, dout_l_dryrun,
+def _copy_files(dout_s_root, dout_l_msroot, dout_l_hpss_accnt, dryrun,
                 dout_l_delete):
 ###############################################################################
 
@@ -71,7 +77,7 @@ def _copy_files(dout_s_root, dout_l_msroot, dout_l_hpss_accnt, dout_l_dryrun,
 
 
 ###############################################################################
-def _copy_dirs_ssh(dout_s_root, dout_l_msroot, dout_l_ssh_loc, dout_l_dryrun,
+def _copy_dirs_ssh(dout_s_root, dout_l_msroot, dout_l_ssh_loc, dryrun,
                    dout_l_delete):
 ###############################################################################
 
@@ -83,7 +89,7 @@ def _copy_dirs_ssh(dout_s_root, dout_l_msroot, dout_l_ssh_loc, dout_l_dryrun,
 
 
 ###############################################################################
-def _copy_dirs_local(dout_s_root, dout_l_msroot, dout_l_arc_root, dout_l_dryrun,
+def _copy_dirs_local(dout_s_root, dout_l_msroot, dout_l_arc_root, dryrun,
                      dout_l_delete):
 ###############################################################################
 
@@ -95,7 +101,7 @@ def _copy_dirs_local(dout_s_root, dout_l_msroot, dout_l_arc_root, dout_l_dryrun,
 
 
 ###############################################################################
-def case_lt_archive(case):
+def case_lt_archive(case, dryrun, force):
 ###############################################################################
     """"
     perform long term archiving of DOUT_S_ROOT files to HPSS
@@ -109,22 +115,17 @@ def case_lt_archive(case):
     append_status("lt_archive starting",caseroot=caseroot,sfile="CaseStatus")
     logger.info("lt_archive starting")
 
-    # determine status of run and short term archiving 
-    # TODO need to look from the bottom of the file backwards
-    runComplete = does_file_have_string(os.path.join(caseroot, "CaseStatus"),
-                                        "Run SUCCESSFUL")
-    logger.info("runComplete : {0}".format(runComplete))
-    staComplete = does_file_have_string(os.path.join(caseroot, "CaseStatus"),
-                                        "st_archiving completed")
+    # determine status of short term archiving 
+    staComplete = is_last_process_complete(os.path.join(caseroot, "CaseStatus"),
+                                           "st_archiving completed", "st_archiving started")
     logger.info("staComplete : {0}".format(staComplete))
 
     # get env variables and call the different archive methods based on mode
-    if runComplete and staComplete:
+    if staComplete or force:
         dout_s_root = case.get_value("DOUT_S_ROOT")
         dout_l_msroot = case.get_value("DOUT_L_MSROOT")
         dout_l_hpss_accnt = case.get_value("DOUT_L_HPSS_ACCNT")
         dout_l_mode = case.get_value("DOUT_L_MODE")
-        dout_l_dryrun = case.get_value("DOUT_L_DRYRUN")
         dout_l_delete = case.get_value("DOUT_L_DELETE_LOC_FILES")
         dout_l_ssh_loc = case.get_value("DOUT_L_SSH_LOC")
         dout_l_arc_root = case.get_value("DOUT_L_ARC_ROOT")
@@ -134,16 +135,16 @@ def case_lt_archive(case):
         # perform archiving based on the mode requested
         if dout_l_mode == "copy_dirs_hsi":
            (success, msg) = _copy_dirs_hsi(dout_s_root, dout_l_msroot, dout_l_hpss_accnt, 
-                                           dout_l_dryrun, dout_l_delete)
+                                           dryrun, dout_l_delete)
         elif dout_l_mode == "copy_files":
            (success, msg) = _copy_files(dout_s_root, dout_l_msroot, dout_l_hpss_accnt, 
-                                        dout_l_dryrun, dout_l_delete)
+                                        dryrun, dout_l_delete)
         elif dout_l_mode == "copy_dirs_ssh":
            (success, msg) = _copy_dirs_ssh(dout_s_root, dout_l_msroot, dout_l_ssh_loc, 
-                                           dout_l_dryrun, dout_l_delete)
+                                           dryrun, dout_l_delete)
         elif dout_l_mode == "copy_dirs_local":
            (success, msg) = _copy_dirs_local(dout_s_root, dout_l_msroot, dout_l_arc_loc, 
-                                             dout_l_dryrun, dout_l_delete)
+                                             dryrun, dout_l_delete)
         else:
             expect(False,
                    "lt_archive: unrecognized DOUT_L_MODE '"+dout_l_mode+"'."
