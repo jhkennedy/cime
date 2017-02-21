@@ -513,17 +513,6 @@
       logical to turn on long term archiving (if DOUT_S is also TRUE)</desc>
   </entry>
 
-  <entry id="DOUT_L_DRYRUN">
-    <type>logical</type>
-    <valid_values>TRUE,FALSE</valid_values>
-    <default_value>FALSE</default_value>
-    <group>run_data_archive</group>
-    <file>env_run.xml</file>
-    <desc>If TRUE, print commands to be run by the long-term archiving script 
-      without actually executing the command. If FALSE, execute the command.
-    </desc>
-  </entry>
-
   <entry id="DOUT_L_HPSS_ACCNT">
     <type>char</type>
     <default_value>00000000</default_value>
