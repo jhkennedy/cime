@@ -1,19 +1,13 @@
 #!/usr/bin/env python
 """
-<<<<<<< HEAD
 Gather all the case metadata and send it to the experiments databases
 via a web post and SVN check-in
-=======
-Gather all the case metadata and send it to the experiments database
-via a web post.
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
---------------------------
+
 Created September, 2016
 
 Author: CSEG <cseg@cgd.ucar.edu>
 """
 
-<<<<<<< HEAD
 from standard_script_setup import *
 
 from CIME.case import Case
@@ -40,12 +34,16 @@ logger = logging.getLogger(__name__)
 
 # define global variables
 _now = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+
 _expdb_url = 'https://csegwebdev.cgd.ucar.edu/expdb2.0'
 _JSON_expdb_url = 'https://csegwebdev.cgd.ucar.edu/expdb2.0/cgi-bin/processJSON.cgi'
-_SVN_expdb_url = 'https://svn-cesm2-expdb.cgd.ucar.edu/'
-_exp_types = ['CMIP6','experiment','development','test']
+_query_expdb_url = 'https://csegwebdev.cgd.ucar.edu/expdb2.0/cgi-bin/query.cgi'
+_SVN_expdb_url = 'https://svn-cesm2-expdb.cgd.ucar.edu'
 
-_XML_vars = ['CASE','COMPILER','COMPSET','CONTINUE_RUN','DOUT_S_ROOT','GRID',
+_exp_types = ['CMIP6','production','development','testing']
+
+_XML_vars = ['CASE','COMPILER','COMPSET','CONTINUE_RUN','DOUT_L_MS',
+             'DOUT_L_MSROOT','DOUT_S','DOUT_S_ROOT','GRID',
              'MACH','MPILIB','MODEL','MODEL_VERSION','REST_N','REST_OPTION',
              'RUNDIR','RUN_REFCASE','RUN_REFDATE','RUN_STARTDATE',
              'RUN_TYPE','STOP_N','STOP_OPTION','USER']
@@ -67,59 +65,21 @@ _copy_template = Template('in "$function" - Unable to copy "$source" to "$dest"'
 _IGNORE_PATTERNS = ['*.pyc','^.git','tmp','.svn','*~']
 
 # file patterns to ignore when doing comparisons for SVN updates
-_EXCLUDE_LIST = ['.svn','archive_files','archive_metadata','case.build',
+# most of these are symbolic links back to CIME source tree
+_EXCLUDE_FILES = ['archive_metadata','case.build',
                  'case.cmpgen_namelists','case.lt_archive','case.run',
                  'case.setup','case.st_archive','case.submit','check_case',
                  'check_input_data','preview_namelists','xmlchange','xmlquery',
-                 '.env_mach_specific.csh','.env_mach_specific.sh','Tools',
-                 'temp_archive_dir_*', 'archive_files']
-=======
-from __future__ import print_function
+                 '.env_mach_specific.csh','.env_mach_specific.sh',
+                 'archive_files', 'Makefile', 'check_lockedfiles', 'getTiming',
+                 'lt_archive.sh', 'mkDepends', 'mkSrcfiles', 'save_provenance']
 
-import sys
+_EXCLUDE_DIRS = ['archive_files','Tools']
 
-# check the system python version and require 2.7.x or greater                                                                                                                         
-if sys.hexversion < 0x02070000:
-    print(70 * "*")
-    print("ERROR: {0} requires python >= 2.7.x. ".format(sys.argv[0]))
-    print("It appears that you are running python {0}".format(
-            ".".join(str(x) for x in sys.version_info[0:3])))
-    print(70 * "*")
-    sys.exit(1)
-
-#
-# built-in modules
-#
-import argparse
-import base64
-import datetime
-import errno
-import getpass
-import json
-import io
-import os, glob, re
-import pprint
-import shutil
-import subprocess
-import traceback
-import urllib2
-import xml.etree.ElementTree as etree
-
-# define global variables
-_pp = pprint.PrettyPrinter(indent=4)
-
-_now = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-
-_expdb_url = 'https://csegwebdev.cgd.ucar.edu/expdb/cgi-bin/processJSON.cgi'
-
-_SVN_expdb_url = 'https://https://svn-cesm2-expdb.cgd.ucar.edu/'
-
-_exp_types = ['CMIP6','experiment','perfomance','test']
-
-_XML_vars = ['CASE','CASEROOT','COMPILER','COMPSET','CONTINUE_RUN','DOUT_S_ROOT','GRID','MACH','MPILIB',
-             'MODEL','JOB_QUEUE','PROJECT','REST_N','REST_OPTION','RUNDIR','RUN_REFCASE','RUN_REFDATE',
-             'RUN_STARTDATE','STOP_N','STOP_OPTION','USER','MODEL_VERSION']
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
+# status strings to search for in CaseStatus
+_run_msgs = ['Model did not complete','Run started','Run FAILED','Run SUCCESSFUL'];
+_sta_msgs = ['st_archiving starting','st_archiving completed']
+_lta_msgs = ['lt_archive starting','lt_archive completed']
 
 # -------------------------------------------------------------------------------
 # PasswordPromptAction class
@@ -156,7 +116,6 @@ def basic_authorization(user, password):
     s = user + ":" + password
     return "Basic " + s.encode("base64").rstrip()
 
-<<<<<<< HEAD
 # ---------------------------------------------------------------------
 # custom SVN Exception handler
 # ---------------------------------------------------------------------
@@ -167,14 +126,11 @@ class SVNException(Exception):
     def __str__(self):
         return repr(self.value)
 
-=======
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
 # -------------------------------------------------------------------------------
 # commandline_options - parse any command line options
 # -------------------------------------------------------------------------------
 
 def commandline_options():
-<<<<<<< HEAD
     """ Process the command line arguments.
     """
     parser = argparse.ArgumentParser(
@@ -187,37 +143,16 @@ def commandline_options():
 
     CIME.utils.setup_standard_logging_options(parser)
 
-=======
-    """Process the command line arguments.
-
-    """
-    parser = argparse.ArgumentParser(
-        description='Query and parse the caseroot files to gather metadata information' \
-            ' that can be posted to the experiments database. CMIP6 experiment case names' \
-            ' must be reserved already in the experiment database. Please see:' \
-            ' https://csesgweb.cgd.ucar.edu/expdb2.0 for details.')
-
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
     parser.add_argument('--user', dest='user', type=str, default=None, required=True,
                         help='User name for SVN CESM developer access')
 
     parser.add_argument('--password', dest='password', action=PasswordPromptAction, type=str, default='', required=True,
                         help='Password for SVN CESM developer access')
 
-<<<<<<< HEAD
-=======
-    parser.add_argument('--backtrace', action='store_true', 
-                        help='Show exception backtraces as extra debugging output')
-
-    parser.add_argument('--debug', required=False, action='store_true',
-                        help='Display debugging messages')
-
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
     parser.add_argument('--caseroot', nargs=1, required=False, 
                         help='Fully quailfied path to case root directory (optional).' \
                             ' Defaults to current working directory.')
 
-<<<<<<< HEAD
     parser.add_argument('--expType', nargs=1, required=True, choices=_exp_types,
                         help='Experiment type. For CMIP6 experiments, the case must already ' \
                              'exist in the experiments database at URL '\
@@ -227,13 +162,16 @@ def commandline_options():
     parser.add_argument('--title', nargs=1, required=False, default=None,
                         help='Title of experiment (optional).')
 
-    parser.add_argument('--ignoreRepoUpdate', action='store_true',
-                        help='Ignore updating the SVN repository with all the caseroot files.' \
-                            ' The experiments database will be updated.')
-
     parser.add_argument('--ignoreLogs', action='store_true',
                         help='Ignore updating the SVN repository with the caseroot/logs files.' \
                             ' The experiments database and SVN repository will be updated.')
+
+    parser.add_argument('--ignoreTiming', action='store_true',
+                        help='Ignore updating the experiments database with timing data.')
+
+    parser.add_argument('--ignoreRepoUpdate', action='store_true',
+                        help='Ignore updating the SVN repository with all the caseroot files.' \
+                            ' The experiments database will be updated.')
 
     parser.add_argument('--dryrun', action='store_true',
                         help='Parse settings and print what actions will be taken but' \
@@ -265,26 +203,63 @@ def get_case_vars(case_dict, case):
 
     for xml_id in _run_vars:
         case_dict[xml_id] = case.get_value(xml_id, resolved=True, subgroup='case.run')
-=======
-    parser.add_argument('--expType', nargs=1, required=True, choices=_exp_types, default='test', 
-                        help='Experiment type. Must be one of {0}. Defaults to "test"'.format(_exp_types))
 
-    parser.add_argument('--expName', nargs=1, required=False, type=str, default=None,
-                        help='CMIP6 experiment name. This option must be defined if expType is set to CMIP6.')
+    return case_dict
 
-    parser.add_argument('--ensNum', nargs=1, required=False, default=None,
-                        help='Ensemble member number')
 
-    parser.add_argument('--title', nargs=1, required=False, default=None,
-                        help='Title of experiment.')
+# ---------------------------------------------------------------------
+# get_case_status
+# ---------------------------------------------------------------------
 
-    parser.add_argument('--ignoreRepoUpdate', action='store_true',
-                        help='Ignore updating the SVN repository with all the caseroot files' \
-                            ' Only the experiments database will be updated.')
+def get_case_status(case_dict):
+    """ get_case_status
+    Parse the CaseStatus looking for status informatoin
 
-    options = parser.parse_args()
+    Arguments:
+        case_dict (dict) - case dictionary to store XML variables
+    """
+    logger.debug('get_case_status')
+    
+    # initialize status variables
+    case_dict['run_status'] = 'Pending'
+    case_dict['sta_status'] = 'Pending'
+    case_dict['lta_status'] = 'Pending'
 
-    return options
+    if os.path.exists(case_dict['CASEROOT']+'/CaseStatus'):
+        f = open(case_dict['CASEROOT']+'/CaseStatus','r')
+        cs = f.read()
+        f.close()
+
+        # get the run status
+        li = 0
+        for run_msg in _run_msgs:
+            tmp_li = cs.rfind(run_msg)
+            if tmp_li > li:
+                li = tmp_li
+                case_dict['run_status'] = run_msg
+
+        # get the st_archive status
+        if case_dict['DOUT_S']:
+            li = 0
+            for sta_msg in _sta_msgs:
+                tmp_li = cs.rfind(sta_msg)
+                if tmp_li > li:
+                    li = tmp_li
+                    case_dict['sta_status'] = sta_msg
+
+        # get the lt_archive status
+        if case_dict['DOUT_L_MS']:
+            li = 0
+            for lta_msg in _lta_msgs:
+                tmp_li = cs.rfind(lta_msg)
+                if tmp_li > li:
+                    li = tmp_li
+                    case_dict['lta_status'] = lta_msg
+
+# TODO get the postprocess status
+
+    return case_dict
+
 
 # ---------------------------------------------------------------------
 # get_XML_vars
@@ -292,6 +267,7 @@ def get_case_vars(case_dict, case):
 
 def get_XML_vars(case_dict, debug):
     """ get_XML_vars
+    ** DEPRECATED - use the case object instead **
     loop through the global list of XML vars and run subprocess
     calls to xmlquery to retrieve them from the caseroot. 
 
@@ -310,60 +286,49 @@ def get_XML_vars(case_dict, debug):
             print('WARNING archive_metadata xmlquery -value {0}: '.format(xml_var),e.errno, e.strerror)
         case_dict[xml_var] = value
 
-    if debug:
-        print('\nDEBUG get_XML_vars case_dict:')
-        _pp.pprint(case_dict)
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
-
     return case_dict
 
 
 # ---------------------------------------------------------------------
-<<<<<<< HEAD
 # check_expdb_case
 # ---------------------------------------------------------------------
-def check_expdb_case(case_dict):
+def check_expdb_case(case_dict, username, password):
     """ check_exp_case
-=======
-# check_exp_case
-# ---------------------------------------------------------------------
-def check_exp_case(case_dict, debug):
-    """check_exp_case
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
     Cross check the casename with the database for a CMIP6 experiment
 
     Arguments:
         case_dict (dict) - case dictionary to store XML variables
-<<<<<<< HEAD
 
     Return true if a matching casename exists in the database or
     false if not.
     """
     logger.debug('check_expdb_case')
-    return True
-=======
-        debug (int) - debug flag
-    """
+    exists = False
+    data_dict = { 'casename':case_dict['CASE'], 'queryType':'checkCaseExists'}
+    data = json.dumps(data_dict)
+    params = urllib.urlencode(dict(username=username, password=password, data=data))
+    try:
+        response = urllib2.urlopen(_query_expdb_url, params)
+        html = response.read()
+        if html.find('True'):
+            exists = True
+    except urllib2.HTTPError as http_e:
+        logger.info('ERROR archive_metadata HTTP post failed "{0} - {1}"'.format(http_e.code, http_e.code))
+    except urllib2.URLError as url_e:
+        logger.info('ERROR archive_metadata URL failed "{0}"'.format(url_e.reason))
 
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
-
+    return exists
 
 # ---------------------------------------------------------------------
 # create_JSON
 # ---------------------------------------------------------------------
 
-<<<<<<< HEAD
 def create_JSON(case_dict):
     """ create_JSON
-=======
-def create_JSON(case_dict, debug):
-    """create_JSON
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
     Create a JSON file in the caseroot/archive_files dir.
 
     Arguments:
         case_dict (dict) - case dictionary to store XML variables
-<<<<<<< HEAD
     """
     logger.debug('create_json')
 
@@ -371,16 +336,6 @@ def create_JSON(case_dict, debug):
         os.makedirs('{0}/archive_files'.format(case_dict['CASEROOT']))
 
     filename = '{0}/archive_files/json.{1}'.format(case_dict['CASEROOT'], _now)
-=======
-        debug (int) - debug flag
-    """
-    if not os.path.exists('{0}/archive_files'.format(case_dict['case_root'])):
-        os.makedirs('{0}/archive_files'.format(case_dict['case_root']))
-    if debug:
-        print('\nDEBUG JSON output of case_dict:')
-        _pp.pprint(json.dumps(case_dict))
-    filename = '{0}/archive_files/json.{1}'.format(case_dict['case_root'], _now)
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
     with io.open(filename, 'w', encoding='utf-8') as f:
         f.write(unicode(json.dumps(case_dict, indent=4, sort_keys=True, ensure_ascii=True)))
 
@@ -388,7 +343,6 @@ def create_JSON(case_dict, debug):
 # post_JSON
 # ---------------------------------------------------------------------
 
-<<<<<<< HEAD
 def post_JSON(case_dict, username, password):
     """ post_JSON
     Post a JSON file in the caseroot/archive_files to the 
@@ -400,17 +354,14 @@ def post_JSON(case_dict, username, password):
         password (string) - SVN developers password
     """
     logger.debug('post_json')
-
-    response = ''
-
     data = json.dumps(case_dict)
     params = urllib.urlencode(dict(username=username, password=password, data=data))
     try:
         response = urllib2.urlopen(_JSON_expdb_url, params)
-    except urllib2.URLError as url_e:
-        logger.info('ERROR archive_metadata URL failed "{0}"'.format(url_e.reason))
     except urllib2.HTTPError as http_e:
         logger.info('ERROR archive_metadata HTTP post failed "{0} - {1}"'.format(http_e.code, http_e.code))
+    except urllib2.URLError as url_e:
+        logger.info('ERROR archive_metadata URL failed "{0}"'.format(url_e.reason))
                   
 # ---------------------------------------------------------------------
 # check_svn
@@ -496,7 +447,7 @@ def get_trunk_tag(case_dict, username, password):
     cmd = ['svn','list', svn_repo, '--username', username, '--password', password]
     try: 
         result = subprocess.check_output(cmd)
-        last_tag = result.split('\n', 1)[0]
+        last_tag = [i for i in result.split('\n') if i][-1]
         last_tag = last_tag[:-1].split('_')[-1]
         tag = int(last_tag.strip('0'))
     except subprocess.CalledProcessError as e:
@@ -594,12 +545,64 @@ def update_local_repo(case_dict, ignoreLogs):
     """    
     logger.debug('update_local_repo')
 
-    dcmp = filecmp.dircmp(case_dict['CASEROOT'], case_dict['archive_temp_dir'], 
-                          _EXCLUDE_LIST, _IGNORE_PATTERNS)
-    
     archive_temp_dir = os.path.basename(os.path.normpath(case_dict['archive_temp_dir']))
-    copy_diff_files(dcmp, case_dict['archive_temp_dir'], case_dict['CASEROOT'], 
-                    archive_temp_dir, case_dict['CASEROOT'], '')
+    from_dir = case_dict['CASEROOT']
+    to_dir = case_dict['archive_temp_dir']
+
+    # append the archive_temp_dir to the exclude list
+    exclude_files = _EXCLUDE_FILES
+    exclude_dirs = _EXCLUDE_DIRS
+    exclude_dirs.append(archive_temp_dir)
+
+    def update_temp_repo(arg, directory, fnames):
+        """ update_local_svn 
+        os.paty.walk handler function
+        Note - this function must be nested in the update_local_repo
+        function in order for the recursion to work correctly.
+        """
+        for filename in fnames:
+            # exclude dirs that are in the exclude_dirs list
+            for dir in exclude_dirs:
+                if dir in filename or dir in directory:
+                    return
+
+            # only include files that aren't in the exclude_files list
+            if filename not in exclude_files:
+                # exclude all files ending with ~
+                if filename[-1] == '~':
+                    return
+
+                src = os.path.join(directory, filename)
+                dest = to_dir + src[len(from_dir):]
+                logger.debug(src+' -> '+dest)
+                if os.path.isdir(src):
+                    if not os.path.exists(dest):
+                        os.mkdir(dest)
+                        cmd = ['svn', 'add', dest]
+                        try:
+                            result = subprocess.check_call(cmd)
+                        except subprocess.CalledProcessError as e:
+                            msg = _call_template.substitute(function='update_lcoal_repo',cmd=cmd,
+                                                            error=e.returncode, strerror=e.output)
+                            logger.warning(msg)
+                            raise SVNException(msg)
+                else:
+                    if os.path.exists(dest):
+                        shutil.copy2(src, dest)
+                    else:
+                        shutil.copy2(src, dest)
+                        # add file to svn archive
+                        cmd = ['svn', 'add', dest]
+                        try:
+                            result = subprocess.check_call(cmd)
+                        except subprocess.CalledProcessError as e:
+                            msg = _call_template.substitute(function='update_lcoal_repo',cmd=cmd,
+                                                            error=e.returncode, strerror=e.output)
+                            logger.warning(msg)
+                            raise SVNException(msg)
+
+
+    os.path.walk(case_dict['CASEROOT'], update_temp_repo, None)
 
     # check if ignoreLogs is specified
     if ignoreLogs:
@@ -649,24 +652,25 @@ def populate_local_repo(case_dict, ignoreLogs):
 
     # loop through the _archive_list and copy to the temp archive dir
     for archive in _archive_list:
-        if os.path.isdir(archive):
-            try:
-                target = case_dict['archive_temp_dir']+'/'+archive
-                shutil.copytree(archive, target, symlinks=False, 
-                                ignore=shutil.ignore_patterns(_IGNORE_PATTERNS))
-            except OSError as e:
-                msg = _copy_template.substitute(function='populate_local_repo',
-                                                source=archive, dest=case_dict['archive_temp_dir'],
-                                                error=e.errno, strerror=e.strerror)
-                logger.warning(msg)
-        else:
-            try:
-                shutil.copy2(archive, case_dict['archive_temp_dir'])
-            except OSError as e:
-                msg = _copy_template.substitute(function='populate_local_repo',
-                                                source=archive, dest=case_dict['archive_temp_dir'],
-                                                error=e.errno, strerror=e.strerror)
-                logger.warning(msg)
+        if os.path.exists(archive):
+            if os.path.isdir(archive):
+                try:
+                    target = case_dict['archive_temp_dir']+'/'+archive
+                    shutil.copytree(archive, target, symlinks=False, 
+                                    ignore=shutil.ignore_patterns(*_IGNORE_PATTERNS))
+                except OSError as e:
+                    msg = _copy_template.substitute(function='populate_local_repo',
+                                                    source=archive, dest=case_dict['archive_temp_dir'],
+                                                    error=e.errno, strerror=e.strerror)
+                    logger.warning(msg)
+            else:
+                try:
+                    shutil.copy2(archive, case_dict['archive_temp_dir'])
+                except OSError as e:
+                    msg = _copy_template.substitute(function='populate_local_repo',
+                                                    source=archive, dest=case_dict['archive_temp_dir'],
+                                                    error=e.errno, strerror=e.strerror)
+                    logger.warning(msg)
 
     # add files with .xml as the prefix
     xml_files = glob.glob('*.xml')
@@ -749,21 +753,20 @@ def checkin_trunk(case_dict, svn_cmd, message,  username, password):
     os.chdir(case_dict['archive_temp_dir'])
     svn_repo = '{0}/trunk'.format(case_dict['svn_repo_url'])
     msg = '"{0}"'.format(message)
-
     cmd = ['svn', svn_cmd, '--username', username, '--password', password, '.', '--message', msg]
-    if svn_cmd in ['import']:
-        cmd = ['svn', svn_cmd, '--username', username, '--password', password, '.', svn_repo, '--message', msg]
-
-    # check-in the trunk to svn
-    try:
-        result = subprocess.check_call(cmd)
-    except subprocess.CalledProcessError as e:
-        msg = _call_template.substitute(function='checkin_trunk',cmd=cmd,
-                                        error=e.returncode, strerror=e.output)
-        logger.warning(msg)
-        raise SVNException(msg)
 
     if svn_cmd in ['import']:
+        # create the trunk dir
+        msg = '"create trunk"'
+        cmd = ['svn', 'mkdir', '--parents', svn_repo, '--username', username, '--password', password, '--message', msg]
+        try:
+            result = subprocess.check_call(cmd)
+        except subprocess.CalledProcessError as e:
+            msg = _call_template.substitute(function='checkin_trunk',cmd=cmd,
+                                            error=e.returncode, strerror=e.output)
+            logger.warning(msg)
+            raise SVNException(msg)
+
         # create the trunk_tags dir
         tags = '{0}/trunk_tags'.format(case_dict['svn_repo_url'])
         msg = '"create trunk_tags"'
@@ -776,6 +779,17 @@ def checkin_trunk(case_dict, svn_cmd, message,  username, password):
             logger.warning(msg)
             raise SVNException(msg)
 
+        msg = '"{0}"'.format(message)
+        cmd = ['svn', svn_cmd, '--username', username, '--password', password, '.', svn_repo, '--message', msg]
+
+    # check-in the trunk to svn
+    try:
+        result = subprocess.check_call(cmd)
+    except subprocess.CalledProcessError as e:
+        msg = _call_template.substitute(function='checkin_trunk',cmd=cmd,
+                                        error=e.returncode, strerror=e.output)
+        logger.warning(msg)
+        raise SVNException(msg)
 
 # ---------------------------------------------------------------------
 # create_tag
@@ -800,40 +814,10 @@ def create_tag(case_dict, new_tag, username, password):
                                         error=e.returncode, strerror=e.output)
         logger.warning(msg)
         raise SVNException(msg)
-=======
-def post_JSON(case_dict, username, password, debug):
-    """create_JSON
-    Create a JSON file in the caseroot/archive_files dir.
-
-    Arguments:
-        case_dict (dict) - case dictionary to store XML variables
-        debug (int) - debug flag
-    """
-## check that username and passwowrd are not empty strings
-    response = ''
-    request = urllib2.Request(_expdb_url,
-             headers = {
-             "Authorization": basic_authorization(username, password), 
-             "Content-Type": "application/json",
-             "User-Agent": "CESM/archive_metadata",
-             }, data = json.dumps(case_dict))
-    try:
-        response = urllib2.urlopen(request)
-    except urllib2.URLError as url_e:
-        _pp.pprint('ERROR archive_metadata URL failed "{0}"'.format(url_e.reason))
-    except urllib2.HTTPError as http_e:
-        _pp.pprint('ERROR archive_metadata HTTP post failed "{0} - {1}"'.format(http_e.code, http_e.code))
-                  
-    if debug:
-        print('\nDEBUG URL post response:')
-        _pp.pprint(response)
-
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
 
 # ---------------------------------------------------------------------
 # update_repo
 # ---------------------------------------------------------------------
-<<<<<<< HEAD
 def update_repo(ignoreLogs, case_dict, username, password):
     """ update_repo
 
@@ -859,7 +843,7 @@ def update_repo(ignoreLogs, case_dict, username, password):
             msg = 'update case metadata for {0} by {1}'.format(case_dict['CASE'],username)
             checkin_trunk(case_dict, 'ci', msg, username, password)
             create_tag(case_dict, new_tag, username, password)
-            logger.info('SVN repository trunk updated to URL "%s"', case_dict['svn_repo_url'])
+            logger.info('SVN repository trunk updated at URL "%s"', case_dict['svn_repo_url'])
             logger.info('   and a new trunk tag created for  "%s"', new_tag)
         else:
             # create a new case repo
@@ -876,18 +860,26 @@ def update_repo(ignoreLogs, case_dict, username, password):
         pass
 
     return case_dict
-=======
-def update_repo():
 
-    pass
 
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
+# ---------------------------------------------------------------------
+# get_timing_data
+# ---------------------------------------------------------------------
+def get_timing_data(case_dict):
+    """ get_timing_data
+    parse the timing data files and add information to the case_dict
+
+    Arguments:
+        case_dict (dict) - case dictionary to store XML variables
+    """
+    logger.debug('get_timing_data')
+    return case_dict
+
 
 # ---------------------------------------------------------------------
 # initialize_main
 # ---------------------------------------------------------------------
 def initialize_main(options):
-<<<<<<< HEAD
     """ initialize_main
 
     Initialize the case dictionary data structure with command line options
@@ -903,67 +895,22 @@ def initialize_main(options):
     username = None
     if options.user:
         username = options.user
+        case_dict['svnlogin'] = username
 
     password = None
     if options.password:
         password = options.password
-=======
-
-    case_dict = dict()
-
-    case_dict['case_root'] = os.getcwd()
-    if options.caseroot:
-        case_dict['case_root'] = options.caseroot[0]
-
-    username = None
-    if options.user:
-        username = options.user[0]
-
-    password = None
-    if options.password:
-        password = options.password[0]
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
 
     if options.expType:
         case_dict['expType'] = options.expType[0]
 
-<<<<<<< HEAD
-=======
-    case_dict['expName'] = None
-    if options.expName:
-        case_dict['expName'] = options.expName[0]
-
-    case_dict['ensNum'] = None
-    if options.ensNum:
-        case_dict['ensNum'] = options.ensNum[0]
-
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
     case_dict['title'] = None
     if options.title:
         case_dict['title'] = options.title[0]
 
-<<<<<<< HEAD
     case_dict['dryrun'] = False
     if options.dryrun:
         case_dict['dryrun'] = True
-            
-    # make sure the caseroot/xmlquery exists
-    xmlquery = '{0}/xmlquery'.format(case_dict['CASEROOT'])
-    if not os.path.isfile(xmlquery) or not os.access(xmlquery, os.X_OK):
-        logger.warning('ERROR archive_metadata unable to execute "%s"',xmlquery)
-=======
-    # check the expType against the casename for CMIP6 experiments
-    if (case_dict['expType'].lower() == 'cmip6'):
-        if (case_dict['expName'] is None):
-            print('ERROR archive_metadata you must specify a CMIP6 experiment name.')
-            sys.exit(1)
-            
-    # make sure the caseroot/xmlquery exists
-    xmlquery = '{0}/xmlquery'.format(case_dict['case_root'])
-    if not os.path.isfile(xmlquery) or not os.access(xmlquery, os.X_OK):
-        print('ERROR archive_metadata unable to execute {0}'.format(xmlquery))
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
-        sys.exit(1)
 
     return case_dict, username, password
 
@@ -977,7 +924,6 @@ def main(options):
     Arguments:
         options (list) - input options from command line
     """
-<<<<<<< HEAD
     logger.debug('main')
 
     (case_dict, username, password) = initialize_main(options)
@@ -985,19 +931,11 @@ def main(options):
     # loop through the _XML_vars gathering values
     with Case(case_dict['CASEROOT'], read_only=True) as case:
         case_dict = get_case_vars(case_dict, case)
-=======
-    debug = options.debug
-    (case_dict, username, password) = initialize_main(options)
- 
-    # loop through the _XML_vars gathering values
-    case_dict = get_XML_vars(case_dict, debug)
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
 
     # check that the casename is reserved in the expdb 
     # for CMIP6 experiments
     if (case_dict['expType'].lower() == 'cmip6'):
-<<<<<<< HEAD
-        if not check_expdb_case(case_dict):
+        if not check_expdb_case(case_dict, username, password):
             logger.info('Unable to archive CMIP6 metadata. '
                         '"%s" casename does not exist in database. '
                         'All CMIP6 experiments casenames must be '
@@ -1011,14 +949,21 @@ def main(options):
         case_dict = update_repo(options.ignoreLogs, case_dict,
                                 username, password)
 
-    # create a JSON file with the date appended
+    # parse the timing data into the case_dict
+    if not options.ignoreTiming:
+        case_dict = get_timing_data(case_dict)
+
+    # parse the CaseStatus into the case_dict 
+    case_dict = get_case_status(case_dict)
+
+    # create a JSON file containing the case_dict with the date appended to the filename
     create_JSON(case_dict)
 
     # post the JSON to the remote DB
-##    post_JSON(case_dict, username, password)
+    post_JSON(case_dict, username, password)
 
     # clean-up the temporary archive files dir
-    if os.path.exists(case_dict['archive_temp_dir']):
+    if not options.ignoreRepoUpdate and os.path.exists(case_dict['archive_temp_dir']):
         shutil.rmtree(case_dict['archive_temp_dir'])
 
     logger.info('Successful completion of archive_metadata')
@@ -1031,31 +976,10 @@ if __name__ == "__main__":
         test_results = doctest.testmod(verbose=True)
         sys.exit(1 if test_results.failed > 0 else 0)
 
-=======
-        check_exp_case(case_dict, debug)
-
-    # create a JSON file with the date appended
-    create_JSON(case_dict, debug)
-
-    # post the JSON to the remote DB
-    post_JSON(case_dict, username, password, debug)
-
-    # create / update the cesm expdb repo with the caseroot files
-    if not options.ignoreRepoUpdate:
-        update_repo()
-
-#===================================                                                           
-if __name__ == "__main__":
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
     options = commandline_options()
     try:
         status = main(options)
         sys.exit(status)
     except Exception as error:
         print(str(error))
-<<<<<<< HEAD
-=======
-        if options.backtrace:
-            traceback.print_exc()
->>>>>>> initial rewrite of archive_metadata into python with all command line args for CMIP6 experiments
         sys.exit(1)
