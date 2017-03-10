@@ -260,35 +260,6 @@ def get_case_status(case_dict):
 
     return case_dict
 
-
-# ---------------------------------------------------------------------
-# get_XML_vars
-# ---------------------------------------------------------------------
-
-def get_XML_vars(case_dict, debug):
-    """ get_XML_vars
-    ** DEPRECATED - use the case object instead **
-    loop through the global list of XML vars and run subprocess
-    calls to xmlquery to retrieve them from the caseroot. 
-
-    Arguments:
-        case_dict (dict) - case dictionary to store XML variables
-        debug (int) - debug flag
-    """
-    cmd = list()
-    for xml_var in _XML_vars:
-        cmd = ['{0}/xmlquery'.format(case_dict['case_root']),'-value','{0}'.format(xml_var)]
-        value = ''
-        try:
-            pipe = subprocess.Popen(cmd, cwd=case_dict['case_root'], stdout=subprocess.PIPE)
-            value = pipe.communicate()[0]
-        except OSError as e:
-            print('WARNING archive_metadata xmlquery -value {0}: '.format(xml_var),e.errno, e.strerror)
-        case_dict[xml_var] = value
-
-    return case_dict
-
-
 # ---------------------------------------------------------------------
 # check_expdb_case
 # ---------------------------------------------------------------------
@@ -499,43 +470,6 @@ def create_readme(case_dict):
     f.close()
 
 # ---------------------------------------------------------------------
-# copy_diff_files
-# ---------------------------------------------------------------------
-def copy_diff_files(dcmp, dest, root, archive, caseroot, sub_dir):
-
-    # update existing svn archived files that changed in the caseroot
-    for name in dcmp.diff_files:
-        logger.info("diff_file %s found in %s and %s" % (name, dcmp.left, dcmp.right))
-        os.remove(dcmp.right+'/'+name)
-        shutil.copy2(dcmp.left+'/'+name, dest)
-
-    # add any new files to the temp_archive_dir and add them to svn
-    for name in dcmp.left_only:
-        if name not in archive:
-            logger.info("diff_file %s found only in %s" % (name, dcmp.left))
-            shutil.copy2(dcmp.left+'/'+name, dest)
-            cmd = ['svn', 'add', name]
-            try:
-                os.chdir(dcmp.right)
-                result = subprocess.check_call(cmd)
-                os.chdir(dcmp.left)
-            except subprocess.CalledProcessError as e:
-                msg = _call_template.substitute(function='copy_diff_files',cmd=cmd,
-                                                error=e.returncode, strerror=e.output)
-                logger.warning(msg)
-                raise SVNException(msg)
-        
-    for sub_dcmp in dcmp.subdirs.values():
-        # RECURSION NOT WORKING...
-        # build up the new dest
-        sub_dir = sub_dir+'/'+os.path.basename(os.path.normpath(sub_dcmp.left))
-        new_dest = caseroot +'/'+archive+'/'+sub_dir
-        new_root = root+'/'+sub_dir
-        new_dcmp = filecmp.dircmp(new_root, new_dest,
-                              _EXCLUDE_LIST, _IGNORE_PATTERNS)
-        copy_diff_files(new_dcmp, new_dest, new_root, archive, caseroot, sub_dir)
-
-# ---------------------------------------------------------------------
 # update_local_repo
 # ---------------------------------------------------------------------
 def update_local_repo(case_dict, ignoreLogs):
@@ -554,9 +488,12 @@ def update_local_repo(case_dict, ignoreLogs):
     exclude_dirs = _EXCLUDE_DIRS
     exclude_dirs.append(archive_temp_dir)
 
+    # *******************************************
     def update_temp_repo(arg, directory, fnames):
+    # *******************************************
         """ update_local_svn 
-        os.paty.walk handler function
+        os.paty.walk handler function to copy and add files
+        to the archive_temp_dir
         Note - this function must be nested in the update_local_repo
         function in order for the recursion to work correctly.
         """
@@ -575,34 +512,62 @@ def update_local_repo(case_dict, ignoreLogs):
                 src = os.path.join(directory, filename)
                 dest = to_dir + src[len(from_dir):]
                 logger.debug(src+' -> '+dest)
-                if os.path.isdir(src):
-                    if not os.path.exists(dest):
-                        os.mkdir(dest)
-                        cmd = ['svn', 'add', dest]
-                        try:
-                            result = subprocess.check_call(cmd)
-                        except subprocess.CalledProcessError as e:
-                            msg = _call_template.substitute(function='update_lcoal_repo',cmd=cmd,
-                                                            error=e.returncode, strerror=e.output)
-                            logger.warning(msg)
-                            raise SVNException(msg)
+                if not os.path.exists(dest):
+                    os.mkdir(dest)
+                    cmd = ['svn', 'add', dest]
+                    try:
+                        result = subprocess.check_call(cmd)
+                    except subprocess.CalledProcessError as e:
+                        msg = _call_template.substitute(function='update_lcoal_repo',cmd=cmd,
+                                                        error=e.returncode, strerror=e.output)
+                        logger.warning(msg)
+                        raise SVNException(msg)
                 else:
-                    if os.path.exists(dest):
-                        shutil.copy2(src, dest)
-                    else:
-                        shutil.copy2(src, dest)
-                        # add file to svn archive
-                        cmd = ['svn', 'add', dest]
-                        try:
-                            result = subprocess.check_call(cmd)
-                        except subprocess.CalledProcessError as e:
-                            msg = _call_template.substitute(function='update_lcoal_repo',cmd=cmd,
-                                                            error=e.returncode, strerror=e.output)
-                            logger.warning(msg)
-                            raise SVNException(msg)
+                    shutil.copy2(src, dest)
 
-
+    # copy and add files from caseroot to temp repo
     os.path.walk(case_dict['CASEROOT'], update_temp_repo, None)
+
+
+    # *******************************************
+    def remove_temp_repo(arg, directory, fnames):
+    # *******************************************
+        """ remove_local_svn 
+        os.paty.walk handler function to remove files from 
+        the archive_temp_dir that are no longer in the caseroot
+        Note - this function must be nested in the update_local_repo
+        function in order for the recursion to work correctly.
+        """
+        for filename in fnames:
+            # exclude dirs that are in the exclude_dirs list
+            for dir in exclude_dirs:
+                if dir in filename or dir in directory:
+                    return
+
+            # only include files that aren't in the exclude_files list
+            if filename not in exclude_files:
+                # exclude all files ending with ~
+                if filename[-1] == '~':
+                    return
+
+                # note - src is now the archive_temp_dir
+                src = os.path.join(directory, filename)
+                # and dest is the caseroot
+                dest = to_dir + src[len(from_dir):]
+                logger.debug(src+' -> '+dest)
+                if not os.path.exists(dest):
+                    os.mkdir(dest)
+                    cmd = ['svn', 'rm', src]
+                    try:
+                        result = subprocess.check_call(cmd)
+                    except subprocess.CalledProcessError as e:
+                        msg = _call_template.substitute(function='remove_lcoal_repo',cmd=cmd,
+                                                        error=e.returncode, strerror=e.output)
+                        logger.warning(msg)
+                        raise SVNException(msg)
+
+    # detect deleted files in src and remove from temp repo
+    os.path.walk(archive_temp_dir, remove_temp_repo, None)
 
     # check if ignoreLogs is specified
     if ignoreLogs:
